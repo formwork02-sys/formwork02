@@ -711,7 +711,7 @@ const MainLayout = () => {
             </div>
           </div>
         </div>
-        <div className="mt-24 pt-8 border-t border-zinc-900 text-[10px] uppercase text-zinc-700">
+        <div className="mt-24 pt-8 border-t border-zinc-900 text-[10px] text-zinc-700">
           © 2026 formwork design studio. All rights reserved.
         </div>
       </footer>

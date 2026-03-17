@@ -1,0 +1,28 @@
+[
+  {
+    "id": "sample-1",
+    "title": "formwork Identity Design",
+    "category": "로고",
+    "description": "formwork의 브랜드 아이덴티티 디자인입니다. 그리드 시스템과 심볼의 의미를 담았습니다.",
+    "date": "2026-03-17",
+    "isPrivate": false,
+    "images": [
+      "https://picsum.photos/seed/formwork1/1200/800",
+      "https://picsum.photos/seed/formwork2/1200/800"
+    ],
+    "createdAt": "2026-03-17T00:00:00.000Z"
+  },
+  {
+    "id": "sample-2",
+    "title": "Exhibition Poster 2026",
+    "category": "대회·행사",
+    "description": "2026년 디자인 전시회를 위한 메인 포스터 및 브랜딩 작업입니다.",
+    "date": "2026-03-15",
+    "isPrivate": false,
+    "images": [
+      "https://picsum.photos/seed/poster1/1200/1600",
+      "https://picsum.photos/seed/poster2/1200/800"
+    ],
+    "createdAt": "2026-03-17T00:00:01.000Z"
+  }
+]

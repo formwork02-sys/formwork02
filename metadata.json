@@ -1,0 +1,5 @@
+{
+  "name": "formwork Portfolio",
+  "description": "A Behance-style portfolio for formwork, featuring a password-protected entry and a custom admin panel for project management.",
+  "requestFramePermissions": []
+}

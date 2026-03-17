@@ -122,7 +122,7 @@ const Hero = () => {
         className="text-center z-10"
       >
         <div className="mb-6">
-          <h2 className="text-[10px] uppercase tracking-[0.5em] text-zinc-500 mb-12">formwork design studio</h2>
+          <h2 className="text-[10px] uppercase tracking-[0.5em] text-zinc-500 mb-12">formwork graphic design</h2>
         </div>
         
         <h1 className="text-[8vw] md:text-[5vw] font-black leading-[1.1] mb-12 max-w-5xl mx-auto">
@@ -274,7 +274,7 @@ const ProjectDetail = () => {
           </div>
           
           <div className="mt-12 lg:mt-0">
-            <p className="text-[10px] text-zinc-700 uppercase">© 2026 formwork design studio</p>
+            <p className="text-[10px] text-zinc-700 uppercase">© 2026 formwork graphic design</p>
           </div>
         </div>
 
@@ -712,7 +712,7 @@ const MainLayout = () => {
           </div>
         </div>
         <div className="mt-24 pt-8 border-t border-zinc-900 text-[10px] text-zinc-700">
-          © 2026 formwork design studio. All rights reserved.
+          © 2026 formwork graphic design. All rights reserved.
         </div>
       </footer>
     </div>

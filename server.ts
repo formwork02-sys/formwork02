@@ -39,6 +39,9 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
+  // Serve uploaded files
+  app.use("/uploads", express.static(UPLOADS_DIR));
+
   // API Routes
   app.get("/api/projects", async (req, res) => {
     const projects = await fs.readJson(PROJECTS_FILE);

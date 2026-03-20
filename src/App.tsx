@@ -668,7 +668,7 @@ const AdminPanel = () => {
 const MainLayout = () => {
   const auth = useContext(AuthContext);
   
-  if (!auth?.isEntered) return <EntryGate />;
+  // if (!auth?.isEntered) return <EntryGate />;
 
   return (
     <div className="bg-black min-h-screen">

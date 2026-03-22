@@ -106,6 +106,12 @@ const EntryGate = () => {
             autoFocus
           />
           {error && <p className="text-xs text-red-500 mt-2">Incorrect password. Please try again.</p>}
+          <button
+            type="submit"
+            className="w-full py-3 text-xs uppercase tracking-widest text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-colors"
+          >
+            Enter
+          </button>
         </form>
       </motion.div>
     </div>
@@ -668,7 +674,7 @@ const AdminPanel = () => {
 const MainLayout = () => {
   const auth = useContext(AuthContext);
   
-  // if (!auth?.isEntered) return <EntryGate />;
+  if (!auth?.isEntered) return <EntryGate />;
 
   return (
     <div className="bg-black min-h-screen">

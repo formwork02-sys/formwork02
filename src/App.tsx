@@ -1,4 +1,5 @@
 import React, { useState, useEffect, createContext, useContext } from "react";
+import { supabase } from "./lib/supabase";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useParams, Link } from "react-router-dom";
 import { motion, AnimatePresence, useScroll, useTransform } from "motion/react";
 import {
@@ -23,6 +24,11 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+async function sha256(str: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 // --- Types ---
 interface Project {
   id: string;
@@ -44,17 +50,6 @@ const CATEGORIES = [
   "광고",
   "명함"
 ];
-
-// --- Utilities ---
-async function sha256(str: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
-// Default password hashes (sha256 of "1234" / "1111").
-// Used as fallback when neither localStorage nor VITE_ env var is set.
-const DEFAULT_ENTRY_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4";
-const DEFAULT_ADMIN_HASH = "0ffe1abd1a08215353c233d6e009613e95eec4253832a761af28ff37ac5a150c";
 
 // --- Contexts ---
 const AuthContext = createContext<{
@@ -86,13 +81,8 @@ const EntryGate = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const success = await auth?.enter(pw);
-      if (!success) {
-        setError(true);
-        setPw("");
-      }
-    } catch {
+    const ok = await auth?.enter(pw);
+    if (!ok) {
       setError(true);
       setPw("");
     }
@@ -904,10 +894,30 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isEntered, setIsEntered] = useState(() => localStorage.getItem("formwork_entered") === "true");
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem("formwork_admin") === "true");
 
+  const getHash = async (key: string): Promise<string | null> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", key)
+      .single();
+    if (error || !data) return null;
+    return data.value as string;
+  };
+
+  const setHash = async (key: string, hash: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await supabase
+      .from("settings")
+      .update({ value: hash })
+      .eq("key", key);
+    return !error;
+  };
+
   const enter = async (pw: string) => {
     const hash = await sha256(pw);
-    const storedHash = localStorage.getItem("formwork_entry_hash") || DEFAULT_ENTRY_HASH;
-    if (hash === storedHash) {
+    const stored = await getHash("entry_password_hash");
+    if (hash === stored) {
       setIsEntered(true);
       localStorage.setItem("formwork_entered", "true");
       return true;
@@ -917,8 +927,8 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const loginAdmin = async (pw: string) => {
     const hash = await sha256(pw);
-    const storedHash = localStorage.getItem("formwork_admin_hash") || DEFAULT_ADMIN_HASH;
-    if (hash === storedHash) {
+    const stored = await getHash("admin_password_hash");
+    if (hash === stored) {
       setIsAdmin(true);
       localStorage.setItem("formwork_admin", "true");
       return true;
@@ -928,18 +938,16 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const changeEntryPassword = async (currentPw: string, newPw: string) => {
     const currentHash = await sha256(currentPw);
-    const storedHash = localStorage.getItem("formwork_entry_hash") || DEFAULT_ENTRY_HASH;
-    if (currentHash !== storedHash) return false;
-    localStorage.setItem("formwork_entry_hash", await sha256(newPw));
-    return true;
+    const stored = await getHash("entry_password_hash");
+    if (currentHash !== stored) return false;
+    return setHash("entry_password_hash", await sha256(newPw));
   };
 
   const changeAdminPassword = async (currentPw: string, newPw: string) => {
     const currentHash = await sha256(currentPw);
-    const storedHash = localStorage.getItem("formwork_admin_hash") || DEFAULT_ADMIN_HASH;
-    if (currentHash !== storedHash) return false;
-    localStorage.setItem("formwork_admin_hash", await sha256(newPw));
-    return true;
+    const stored = await getHash("admin_password_hash");
+    if (currentHash !== stored) return false;
+    return setHash("admin_password_hash", await sha256(newPw));
   };
 
   const logout = () => {

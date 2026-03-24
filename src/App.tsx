@@ -1,18 +1,19 @@
 import React, { useState, useEffect, createContext, useContext } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useParams, Link } from "react-router-dom";
 import { motion, AnimatePresence, useScroll, useTransform } from "motion/react";
-import { 
-  Plus, 
-  Trash2, 
-  Image as ImageIcon, 
-  X, 
-  ChevronRight, 
+import {
+  Plus,
+  Trash2,
+  Image as ImageIcon,
+  X,
+  ChevronRight,
   ArrowLeft,
   Lock,
   Eye,
   EyeOff,
   Menu,
-  LogOut
+  LogOut,
+  KeyRound
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -44,6 +45,12 @@ const CATEGORIES = [
   "명함"
 ];
 
+// --- Utilities ---
+async function sha256(str: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 // --- Contexts ---
 const AuthContext = createContext<{
   isEntered: boolean;
@@ -52,6 +59,8 @@ const AuthContext = createContext<{
   loginAdmin: (pw: string) => Promise<boolean>;
   logout: () => void;
   exit: () => void;
+  changeEntryPassword: (currentPw: string, newPw: string) => Promise<boolean>;
+  changeAdminPassword: (currentPw: string, newPw: string) => Promise<boolean>;
 } | null>(null);
 
 const ProjectContext = createContext<{
@@ -72,8 +81,13 @@ const EntryGate = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = await auth?.enter(pw);
-    if (!success) {
+    try {
+      const success = await auth?.enter(pw);
+      if (!success) {
+        setError(true);
+        setPw("");
+      }
+    } catch {
       setError(true);
       setPw("");
     }
@@ -318,7 +332,55 @@ const AdminPanel = () => {
   
   const [isAdding, setIsAdding] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // Password change form state
+  const [entryCurrentPw, setEntryCurrentPw] = useState("");
+  const [entryNewPw, setEntryNewPw] = useState("");
+  const [entryConfirmPw, setEntryConfirmPw] = useState("");
+  const [entryPwMsg, setEntryPwMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
+
+  const [adminCurrentPw, setAdminCurrentPw] = useState("");
+  const [adminNewPw, setAdminNewPw] = useState("");
+  const [adminConfirmPw, setAdminConfirmPw] = useState("");
+  const [adminPwMsg, setAdminPwMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
+
+  const resetPasswordModal = () => {
+    setEntryCurrentPw(""); setEntryNewPw(""); setEntryConfirmPw(""); setEntryPwMsg(null);
+    setAdminCurrentPw(""); setAdminNewPw(""); setAdminConfirmPw(""); setAdminPwMsg(null);
+    setIsChangingPassword(false);
+  };
+
+  const handleChangeEntryPw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (entryNewPw !== entryConfirmPw) {
+      setEntryPwMsg({ type: "error", text: "새 비밀번호가 일치하지 않습니다." });
+      return;
+    }
+    const ok = await auth?.changeEntryPassword(entryCurrentPw, entryNewPw);
+    if (ok) {
+      setEntryPwMsg({ type: "success", text: "입장 비밀번호가 변경되었습니다." });
+      setEntryCurrentPw(""); setEntryNewPw(""); setEntryConfirmPw("");
+    } else {
+      setEntryPwMsg({ type: "error", text: "현재 비밀번호가 올바르지 않습니다." });
+    }
+  };
+
+  const handleChangeAdminPw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminNewPw !== adminConfirmPw) {
+      setAdminPwMsg({ type: "error", text: "새 비밀번호가 일치하지 않습니다." });
+      return;
+    }
+    const ok = await auth?.changeAdminPassword(adminCurrentPw, adminNewPw);
+    if (ok) {
+      setAdminPwMsg({ type: "success", text: "관리자 비밀번호가 변경되었습니다." });
+      setAdminCurrentPw(""); setAdminNewPw(""); setAdminConfirmPw("");
+    } else {
+      setAdminPwMsg({ type: "error", text: "현재 비밀번호가 올바르지 않습니다." });
+    }
+  };
+
   // Form State
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState(CATEGORIES[0]);
@@ -428,14 +490,20 @@ const AdminPanel = () => {
             <p className="text-zinc-500 text-sm">Manage your portfolio projects</p>
           </div>
           <div className="flex gap-4">
-            <button 
+            <button
               onClick={() => setIsAdding(true)}
               className="bg-white text-black px-6 py-2 rounded-full font-bold flex items-center gap-2 hover:bg-zinc-200 transition-colors"
             >
               <Plus size={18} />
               New Project
             </button>
-            <button 
+            <button
+              onClick={() => setIsChangingPassword(true)}
+              className="bg-zinc-900 text-white px-4 py-2 rounded-full border border-zinc-800 hover:bg-zinc-800 transition-colors"
+            >
+              <KeyRound size={18} />
+            </button>
+            <button
               onClick={() => {
                 auth?.logout();
                 navigate("/");
@@ -667,6 +735,106 @@ const AdminPanel = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Password Change Modal */}
+      <AnimatePresence>
+        {isChangingPassword && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-zinc-900 border border-zinc-800 w-full max-w-2xl rounded-3xl overflow-hidden"
+            >
+              <div className="p-8 border-b border-zinc-800 flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <KeyRound size={20} />
+                  <h2 className="text-xl font-black">비밀번호 변경</h2>
+                </div>
+                <button onClick={resetPasswordModal} className="p-2 hover:bg-zinc-800 rounded-full">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Entry Password */}
+                <form onSubmit={handleChangeEntryPw} className="space-y-4">
+                  <h3 className="text-[10px] uppercase text-zinc-500 font-medium tracking-widest mb-4">입장 비밀번호</h3>
+                  <input
+                    type="password"
+                    value={entryCurrentPw}
+                    onChange={e => { setEntryCurrentPw(e.target.value); setEntryPwMsg(null); }}
+                    placeholder="현재 비밀번호"
+                    className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 focus:outline-none focus:border-white transition-colors text-sm"
+                  />
+                  <input
+                    type="password"
+                    value={entryNewPw}
+                    onChange={e => { setEntryNewPw(e.target.value); setEntryPwMsg(null); }}
+                    placeholder="새 비밀번호"
+                    className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 focus:outline-none focus:border-white transition-colors text-sm"
+                  />
+                  <input
+                    type="password"
+                    value={entryConfirmPw}
+                    onChange={e => { setEntryConfirmPw(e.target.value); setEntryPwMsg(null); }}
+                    placeholder="새 비밀번호 확인"
+                    className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 focus:outline-none focus:border-white transition-colors text-sm"
+                  />
+                  {entryPwMsg && (
+                    <p className={`text-xs ${entryPwMsg.type === "success" ? "text-emerald-500" : "text-red-500"}`}>
+                      {entryPwMsg.text}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-zinc-200 transition-colors text-sm"
+                  >
+                    변경
+                  </button>
+                </form>
+
+                {/* Admin Password */}
+                <form onSubmit={handleChangeAdminPw} className="space-y-4">
+                  <h3 className="text-[10px] uppercase text-zinc-500 font-medium tracking-widest mb-4">관리자 비밀번호</h3>
+                  <input
+                    type="password"
+                    value={adminCurrentPw}
+                    onChange={e => { setAdminCurrentPw(e.target.value); setAdminPwMsg(null); }}
+                    placeholder="현재 비밀번호"
+                    className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 focus:outline-none focus:border-white transition-colors text-sm"
+                  />
+                  <input
+                    type="password"
+                    value={adminNewPw}
+                    onChange={e => { setAdminNewPw(e.target.value); setAdminPwMsg(null); }}
+                    placeholder="새 비밀번호"
+                    className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 focus:outline-none focus:border-white transition-colors text-sm"
+                  />
+                  <input
+                    type="password"
+                    value={adminConfirmPw}
+                    onChange={e => { setAdminConfirmPw(e.target.value); setAdminPwMsg(null); }}
+                    placeholder="새 비밀번호 확인"
+                    className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 focus:outline-none focus:border-white transition-colors text-sm"
+                  />
+                  {adminPwMsg && (
+                    <p className={`text-xs ${adminPwMsg.type === "success" ? "text-emerald-500" : "text-red-500"}`}>
+                      {adminPwMsg.text}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-zinc-200 transition-colors text-sm"
+                  >
+                    변경
+                  </button>
+                </form>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -732,13 +900,9 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem("formwork_admin") === "true");
 
   const enter = async (pw: string) => {
-    const res = await fetch("/api/verify-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: pw, type: "entry" })
-    });
-    const data = await res.json();
-    if (data.success) {
+    const hash = await sha256(pw);
+    const storedHash = localStorage.getItem("formwork_entry_hash") || import.meta.env.VITE_ENTRY_HASH;
+    if (hash === storedHash) {
       setIsEntered(true);
       localStorage.setItem("formwork_entered", "true");
       return true;
@@ -747,18 +911,30 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const loginAdmin = async (pw: string) => {
-    const res = await fetch("/api/verify-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: pw, type: "admin" })
-    });
-    const data = await res.json();
-    if (data.success) {
+    const hash = await sha256(pw);
+    const storedHash = localStorage.getItem("formwork_admin_hash") || import.meta.env.VITE_ADMIN_HASH;
+    if (hash === storedHash) {
       setIsAdmin(true);
       localStorage.setItem("formwork_admin", "true");
       return true;
     }
     return false;
+  };
+
+  const changeEntryPassword = async (currentPw: string, newPw: string) => {
+    const currentHash = await sha256(currentPw);
+    const storedHash = localStorage.getItem("formwork_entry_hash") || import.meta.env.VITE_ENTRY_HASH;
+    if (currentHash !== storedHash) return false;
+    localStorage.setItem("formwork_entry_hash", await sha256(newPw));
+    return true;
+  };
+
+  const changeAdminPassword = async (currentPw: string, newPw: string) => {
+    const currentHash = await sha256(currentPw);
+    const storedHash = localStorage.getItem("formwork_admin_hash") || import.meta.env.VITE_ADMIN_HASH;
+    if (currentHash !== storedHash) return false;
+    localStorage.setItem("formwork_admin_hash", await sha256(newPw));
+    return true;
   };
 
   const logout = () => {
@@ -774,7 +950,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ isEntered, isAdmin, enter, loginAdmin, logout, exit }}>
+    <AuthContext.Provider value={{ isEntered, isAdmin, enter, loginAdmin, logout, exit, changeEntryPassword, changeAdminPassword }}>
       {children}
     </AuthContext.Provider>
   );

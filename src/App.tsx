@@ -974,10 +974,25 @@ const ProjectProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const fetchProjects = async () => {
+    if (!supabase) return;
     try {
-      const res = await fetch("/api/projects");
-      const data = await res.json();
-      setProjects(data.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      setProjects(
+        (data ?? []).map((p: any) => ({
+          id: p.id,
+          title: p.title,
+          category: p.category,
+          description: p.description,
+          date: p.date,
+          isPrivate: p.is_private,
+          images: p.images ?? [],
+          createdAt: p.created_at,
+        }))
+      );
     } catch (e) {
       console.error(e);
     } finally {
@@ -989,27 +1004,71 @@ const ProjectProvider = ({ children }: { children: React.ReactNode }) => {
     fetchProjects();
   }, []);
 
-  const addProject = async (formData: FormData) => {
-    await fetch("/api/projects", {
+  // 이미지 파일을 Cloudinary에 업로드하고 URL 배열 반환
+  const uploadImages = async (files: File[]): Promise<string[]> => {
+    if (files.length === 0) return [];
+    const fd = new FormData();
+    files.forEach(f => fd.append("images", f));
+    const res = await fetch("/api/upload", { method: "POST", body: fd });
+    const { urls } = await res.json();
+    return urls as string[];
+  };
+
+  // Cloudinary에서 이미지 삭제
+  const removeImages = async (urls: string[]) => {
+    if (urls.length === 0) return;
+    await fetch("/api/images/delete", {
       method: "POST",
-      body: formData
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls }),
+    });
+  };
+
+  const addProject = async (formData: FormData) => {
+    const files = formData.getAll("images") as File[];
+    const imageUrls = await uploadImages(files);
+
+    await supabase!.from("projects").insert({
+      id: Date.now().toString(),
+      title: formData.get("title") as string,
+      category: formData.get("category") as string,
+      description: formData.get("description") as string,
+      date: (formData.get("date") as string) || new Date().toISOString().split("T")[0],
+      is_private: formData.get("isPrivate") === "true",
+      images: imageUrls,
+      created_at: new Date().toISOString(),
     });
     fetchProjects();
   };
 
   const updateProject = async (id: string, formData: FormData) => {
-    await fetch(`/api/projects/${id}`, {
-      method: "PUT",
-      body: formData
-    });
+    const files = formData.getAll("images") as File[];
+    const kept: string[] = JSON.parse((formData.get("existingImages") as string) || "[]");
+
+    // 제거된 이미지 삭제
+    const current = projects.find(p => p.id === id);
+    if (current) {
+      await removeImages(current.images.filter(img => !kept.includes(img)));
+    }
+
+    const newUrls = await uploadImages(files);
+
+    await supabase!.from("projects").update({
+      title: formData.get("title") as string,
+      category: formData.get("category") as string,
+      description: formData.get("description") as string,
+      date: formData.get("date") as string,
+      is_private: formData.get("isPrivate") === "true",
+      images: [...kept, ...newUrls],
+    }).eq("id", id);
     fetchProjects();
   };
 
   const deleteProject = async (id: string) => {
     if (!confirm("Are you sure you want to delete this project?")) return;
-    await fetch(`/api/projects/${id}`, {
-      method: "DELETE"
-    });
+    const project = projects.find(p => p.id === id);
+    await supabase!.from("projects").delete().eq("id", id);
+    if (project) await removeImages(project.images);
     fetchProjects();
   };
 
